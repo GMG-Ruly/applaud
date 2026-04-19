@@ -143,6 +143,11 @@ function migrate(d: Database.Database): void {
   } catch {
     /* exists */
   }
+  // Rows that already have summary.md on disk should not show as "missing summary"
+  // until the next Plaud sync; align plaud_is_summary with summary_downloaded_at.
+  d.exec(
+    "UPDATE recordings SET plaud_is_summary = 1 WHERE summary_downloaded_at IS NOT NULL",
+  );
   try {
     d.exec("ALTER TABLE recordings ADD COLUMN trash_asset_probe_at INTEGER");
   } catch {

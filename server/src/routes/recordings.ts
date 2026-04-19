@@ -70,6 +70,10 @@ recordingsRouter.post("/:id/purge", (req, res) => {
     res.status(400).json({ error: "not in trash" });
     return;
   }
+  if (result === "disk_error") {
+    res.status(500).json({ error: "could not remove recording folder from disk" });
+    return;
+  }
   res.json({ ok: true });
 });
 

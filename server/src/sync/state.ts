@@ -303,14 +303,23 @@ export function restoreRecording(id: string): void {
     .run(id);
 }
 
-function purgeOneSoftDeletedRow(row: RecordingDbRow, now: number): void {
+/** @returns false if disk removal was required and failed (DB row kept). */
+function purgeOneSoftDeletedRow(row: RecordingDbRow, now: number): boolean {
   const cfg = loadConfig();
   if (cfg.recordingsDir) {
     const folderAbs = path.join(cfg.recordingsDir, row.folder);
     try {
       rmSync(folderAbs, { recursive: true, force: true });
     } catch (err) {
-      logger.warn({ err, id: row.id }, "purge: failed to remove folder");
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { err, id: row.id, folderAbs },
+        "purge: failed to remove folder; retaining DB row to avoid orphan data on disk",
+      );
+      getDb()
+        .prepare("UPDATE recordings SET last_error = ? WHERE id = ?")
+        .run(`Purge failed (disk): ${msg}`.slice(0, 500), row.id);
+      return false;
     }
   }
   try {
@@ -320,6 +329,7 @@ function purgeOneSoftDeletedRow(row: RecordingDbRow, now: number): void {
   }
   removeRecordingRow(row.id);
   logger.info({ id: row.id }, "soft-delete purge complete; id added to sync_ignore");
+  return true;
 }
 
 export function purgeExpiredSoftDeletes(): void {
@@ -336,14 +346,15 @@ export function purgeExpiredSoftDeletes(): void {
 }
 
 /** Permanently remove a soft-deleted row immediately (same as scheduled purge). */
-export function purgeSoftDeletedRecordingNow(id: string): "ok" | "not_found" | "not_in_trash" {
+export function purgeSoftDeletedRecordingNow(
+  id: string,
+): "ok" | "not_found" | "not_in_trash" | "disk_error" {
   const row = getDb()
     .prepare<[string], RecordingDbRow>("SELECT * FROM recordings WHERE id = ?")
     .get(id);
   if (!row) return "not_found";
   if (row.user_deleted_at == null) return "not_in_trash";
-  purgeOneSoftDeletedRow(row, Date.now());
-  return "ok";
+  return purgeOneSoftDeletedRow(row, Date.now()) ? "ok" : "disk_error";
 }
 
 export function countPendingTranscripts(): number {
