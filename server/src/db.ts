@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { ensureConfigDir, dbPath } from "./paths.js";
-import type { RecordingRow } from "@applaud/shared";
+import type { RecordingRow, RecordingStatus } from "@applaud/shared";
 
 let db: Database.Database | null = null;
 
@@ -120,6 +120,41 @@ function migrate(d: Database.Database): void {
       }
     }
   }
+
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS sync_ignore (
+      id TEXT PRIMARY KEY,
+      ignored_at INTEGER NOT NULL
+    );
+  `);
+
+  try {
+    d.exec("ALTER TABLE recordings ADD COLUMN user_deleted_at INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    d.exec("ALTER TABLE recordings ADD COLUMN user_purge_at INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    d.exec("ALTER TABLE recordings ADD COLUMN plaud_is_summary INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  try {
+    d.exec("ALTER TABLE recordings ADD COLUMN trash_asset_probe_at INTEGER");
+  } catch {
+    /* exists */
+  }
+}
+
+function statusOf(row: RecordingDbRow): RecordingStatus {
+  if (row.last_error) return "error";
+  if (!row.audio_downloaded_at) return "pending_audio";
+  if (!row.transcript_downloaded_at) return "audio_only";
+  return "complete";
 }
 
 interface RecordingDbRow {
@@ -144,6 +179,10 @@ interface RecordingDbRow {
   last_error: string | null;
   metadata_json: string | null;
   transcript_text: string | null;
+  user_deleted_at: number | null;
+  user_purge_at: number | null;
+  plaud_is_summary: number;
+  trash_asset_probe_at: number | null;
 }
 
 export function rowToRecording(row: RecordingDbRow): RecordingRow {
@@ -167,6 +206,10 @@ export function rowToRecording(row: RecordingDbRow): RecordingRow {
     webhookTranscriptFiredAt: row.webhook_transcript_fired_at,
     isTrash: row.is_trash === 1,
     lastError: row.last_error,
+    status: statusOf(row),
+    userDeletedAt: row.user_deleted_at ?? null,
+    userPurgeAt: row.user_purge_at ?? null,
+    plaudIsSummary: (row.plaud_is_summary ?? 0) === 1,
   };
 }
 
