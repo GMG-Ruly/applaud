@@ -20,6 +20,12 @@ function formatDate(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
+/** Safe local filename prefix for `download=` attributes. */
+function safeDownloadBasename(filename: string): string {
+  const s = filename.replace(/[/\\?%*:|"<>]/g, "_").trim() || "recording";
+  return s.slice(0, 120);
+}
+
 function formatTimeCompact(seconds: number): string {
   const s = Math.floor(seconds);
   const h = Math.floor(s / 3600);
@@ -361,6 +367,9 @@ export function RecordingDetailPage(): JSX.Element {
               transcriptRef={transcriptRef}
               blockRefs={blockRefs}
               onSeek={(sec) => { if (audioRef.current) { audioRef.current.currentTime = sec; audioRef.current.play(); } }}
+              mediaBase={mediaBase}
+              transcriptFilesAvailable={!!r.transcriptDownloadedAt}
+              recordingFilename={r.filename}
             />
           ) : r.audioDownloadedAt ? (
             <section className="card p-6">
@@ -379,21 +388,32 @@ export function RecordingDetailPage(): JSX.Element {
           {summaryMarkdownDisplay && (
             <>
               <section className="bg-surface-container-high rounded-xl p-6 shadow-lg border border-outline-variant/20 relative">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
                   <h2 className="text-sm font-label uppercase tracking-widest text-tertiary flex items-center gap-2 font-semibold">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     AI Summary
                   </h2>
-                  <button
-                    onClick={() => setSummaryExpanded(true)}
-                    className="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors"
-                    title="Expand summary"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
-                      <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {r.summaryDownloadedAt ? (
+                      <a
+                        href={`${mediaBase}/summary.md`}
+                        download={`${safeDownloadBasename(r.filename)}-summary.md`}
+                        className="btn-ghost text-xs whitespace-nowrap"
+                      >
+                        Download .md
+                      </a>
+                    ) : null}
+                    <button
+                      onClick={() => setSummaryExpanded(true)}
+                      className="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors"
+                      title="Expand summary"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                        <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-hidden relative" style={{ maxHeight: "50vh" }}>
                   <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed text-on-surface [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-on-surface [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-on-surface [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-on-surface [&_p]:text-on-surface-variant [&_li]:text-on-surface-variant [&_strong]:text-on-surface [&_a]:text-primary [&_ul]:space-y-1 [&_ol]:space-y-1">
@@ -413,20 +433,31 @@ export function RecordingDetailPage(): JSX.Element {
                     style={{ maxHeight: "90vh" }}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
+                    <div className="flex items-center justify-between gap-2 p-6 border-b border-outline-variant/30 flex-wrap">
                       <h2 className="text-sm font-label uppercase tracking-widest text-tertiary flex items-center gap-2 font-semibold">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                         AI Summary
                       </h2>
-                      <button
-                        onClick={() => setSummaryExpanded(false)}
-                        className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors"
-                        title="Close"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {r.summaryDownloadedAt ? (
+                          <a
+                            href={`${mediaBase}/summary.md`}
+                            download={`${safeDownloadBasename(r.filename)}-summary.md`}
+                            className="btn-ghost text-xs whitespace-nowrap"
+                          >
+                            Download .md
+                          </a>
+                        ) : null}
+                        <button
+                          onClick={() => setSummaryExpanded(false)}
+                          className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors"
+                          title="Close"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <div className="overflow-y-auto p-6" style={{ maxHeight: "calc(90vh - 73px)" }}>
                       <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed text-on-surface [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-on-surface [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-on-surface [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-on-surface [&_p]:text-on-surface-variant [&_li]:text-on-surface-variant [&_strong]:text-on-surface [&_a]:text-primary [&_ul]:space-y-1 [&_ol]:space-y-1">
@@ -464,18 +495,52 @@ export function RecordingDetailPage(): JSX.Element {
 
 // --- Transcript card with search ---
 
+function TranscriptDownloadLinks({
+  mediaBase,
+  recordingFilename,
+}: {
+  mediaBase: string;
+  recordingFilename: string;
+}): JSX.Element {
+  const base = safeDownloadBasename(recordingFilename);
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <a
+        href={`${mediaBase}/transcript.txt`}
+        download={`${base}-transcript.txt`}
+        className="btn-ghost text-xs whitespace-nowrap"
+      >
+        Transcript (.txt)
+      </a>
+      <a
+        href={`${mediaBase}/transcript.json`}
+        download={`${base}-transcript.json`}
+        className="btn-ghost text-xs whitespace-nowrap"
+      >
+        Transcript (JSON)
+      </a>
+    </div>
+  );
+}
+
 function TranscriptCard({
   text,
   currentTime,
   transcriptRef,
   blockRefs,
   onSeek,
+  mediaBase,
+  transcriptFilesAvailable,
+  recordingFilename,
 }: {
   text: string;
   currentTime: number;
   transcriptRef: React.RefObject<HTMLDivElement | null>;
   blockRefs: React.MutableRefObject<Map<number, HTMLDivElement>>;
   onSeek: (seconds: number) => void;
+  mediaBase: string;
+  transcriptFilesAvailable: boolean;
+  recordingFilename: string;
 }): JSX.Element {
   const blocks = useMemo(() => parseTranscript(text), [text]);
   const speakerMap = useMemo(() => new Map<string, string>(), []);
@@ -575,8 +640,11 @@ function TranscriptCard({
   if (blocks.length === 0) {
     return (
       <section className="card overflow-hidden flex flex-col" style={{ maxHeight: "600px" }}>
-        <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/30 flex-shrink-0">
+        <div className="p-6 bg-surface-container-high flex flex-wrap justify-between items-center gap-3 border-b border-outline-variant/30 flex-shrink-0">
           <h2 className="text-sm font-label uppercase tracking-widest text-primary font-semibold">Transcript</h2>
+          {transcriptFilesAvailable ? (
+            <TranscriptDownloadLinks mediaBase={mediaBase} recordingFilename={recordingFilename} />
+          ) : null}
         </div>
         <div className="flex-1 overflow-y-auto p-6">
           <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-on-surface">{text}</pre>
@@ -588,8 +656,13 @@ function TranscriptCard({
   return (
     <section className="card overflow-hidden flex flex-col" style={{ maxHeight: "600px" }}>
       {/* Header with search */}
-      <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/30 flex-shrink-0 gap-3">
-        <h2 className="text-sm font-label uppercase tracking-widest text-primary font-semibold">Transcript</h2>
+      <div className="p-6 bg-surface-container-high flex flex-wrap justify-between items-center border-b border-outline-variant/30 flex-shrink-0 gap-3">
+        <div className="flex flex-wrap items-center gap-3 min-w-0">
+          <h2 className="text-sm font-label uppercase tracking-widest text-primary font-semibold shrink-0">Transcript</h2>
+          {transcriptFilesAvailable ? (
+            <TranscriptDownloadLinks mediaBase={mediaBase} recordingFilename={recordingFilename} />
+          ) : null}
+        </div>
         {searchOpen ? (
           <div className="flex items-center gap-2">
             <div className="relative">
