@@ -12,14 +12,12 @@ import { loadConfig, updateConfig } from "../config.js";
 import { testWebhook } from "../webhook/post.js";
 import { poller } from "../sync/poller.js";
 import { clearSyncIgnore } from "../sync/state.js";
+import { redactConfig, mergeWebhookSecret } from "./config-helpers.js";
 
 export const configRouter = Router();
 
 configRouter.get("/", (_req, res) => {
-  const cfg = loadConfig();
-  // Redact the token — we never send it to the browser.
-  const redacted = { ...cfg, token: cfg.token ? "***REDACTED***" : null };
-  res.json({ config: redacted });
+  res.json({ config: redactConfig(loadConfig()) });
 });
 
 const PatchSchema = z.object({
@@ -49,14 +47,18 @@ configRouter.post("/", (req, res) => {
     return;
   }
   const patch = parsed.data;
-  const prevImportPlaudDeleted = loadConfig().importPlaudDeleted;
+  const prev = loadConfig();
+  const prevImportPlaudDeleted = prev.importPlaudDeleted;
+  const mergedSecret = patch.webhook
+    ? mergeWebhookSecret(prev.webhook?.secret, patch.webhook.secret)
+    : undefined;
   const normalized = {
     ...patch,
     webhook: patch.webhook
       ? {
           url: patch.webhook.url,
           enabled: patch.webhook.enabled ?? patch.webhook.url.length > 0,
-          ...(patch.webhook.secret ? { secret: patch.webhook.secret } : {}),
+          ...(mergedSecret ? { secret: mergedSecret } : {}),
         }
       : patch.webhook,
   };
@@ -64,7 +66,7 @@ configRouter.post("/", (req, res) => {
   if (patch.importPlaudDeleted === true && !prevImportPlaudDeleted) {
     void poller.trigger();
   }
-  res.json({ config: { ...next, token: next.token ? "***REDACTED***" : null } });
+  res.json({ config: redactConfig(next) });
 });
 
 const TestWebhookSchema = z.object({ url: z.string().url() });
